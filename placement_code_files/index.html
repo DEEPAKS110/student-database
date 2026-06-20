@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <title>Student Management Dashboard</title>
+</head>
+<body>
+
+<header>
+    <h2>🎓 Student Management Dashboard</h2>
+    <button class="logout-btn hidden" id="logoutBtn" onclick="handleLogout()">Logout</button>
+</header>
+
+<div class="login-page" id="loginPage">
+    <div class="login-card">
+        <h2>Admin Login</h2>
+        <input type="text" id="loginUsername" placeholder="Username">
+        <input type="password" id="loginPassword" placeholder="Password">
+        <button id="loginButton" type="button">Log In</button>
+        <p class="login-error" id="loginError"></p>
+    </div>
+</div>
+
+<div class="container hidden" id="dashboardPage">
+
+    <!-- Form -->
+    <div class="form-box">
+        <input type="text" id="name" placeholder="Name">
+        <input type="number" id="age" placeholder="Age">
+        <input type="text" id="department" placeholder="Department">
+        <input type="number" id="percentage" placeholder="Percentage">
+        <button onclick="addStudent()">Add Student</button>
+        <button onclick="goToPerformance()">View Performance</button>
+        <button class="secondary" onclick="loadJSONData()">Load JSON Data</button>
+    </div>
+
+    <!-- Table -->
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Age</th>
+                <th>Department</th>
+                <th>Percentage</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="studentTable">
+        </tbody>
+    </table>
+
+</div>
+
+<script>
+    const VALID_USERNAME = 'admin';
+    const VALID_PASSWORD = 'admin123';
+    const STORAGE_KEY = 'placement_students';
+    const LOGIN_KEY = 'placement_logged_in';
+    let students = [];
+    let useLocalStorage = false;
+
+    function loadLocalStudents() {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    }
+
+    function saveLocalStudents(data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    async function fetchStudents() {
+        try {
+            const response = await fetch('/api/students', { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('API unavailable or 401 Unauthorized');
+            students = await response.json();
+            
+            // Provide IDs for backend items missing them (due to manual JSON edits)
+            students = students.map(s => {
+                if(!s.id) s.id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
+                return s;
+            });
+
+            saveLocalStudents(students);
+            useLocalStorage = false;
+        } catch (error) {
+            useLocalStorage = true;
+            let localData = loadLocalStudents();
+            
+            if (localData && localData.length > 0) {
+                students = localData;
+            } else {
+                // Automatically fetch students.json if local storage is completely empty
+                try {
+                    const jsonResp = await fetch("students.json");
+                    if (jsonResp.ok) {
+                        const data = await jsonResp.json();
+                        students = data.map(s => ({
+                            id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+                            ...s
+                        }));
+                        saveLocalStudents(students);
+                    } else {
+                        students = [];
+                    }
+                } catch(e) {
+                    students = [];
+                }
+            }
+        }
+    }
+
+    function goToPerformance() {
+        window.location.href = 'performance.html';
+    }
+
+    async function addStudent() {
+        const name = document.getElementById("name").value.trim();
+        const age = Number(document.getElementById("age").value);
+        const department = document.getElementById("department").value.trim();
+        const percentage = Number(document.getElementById("percentage").value);
+
+        if (!name || !age || !department || !percentage) {
+            alert("Please fill all fields!");
+            return;
+        }
+
+        const student = {
+            id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+            name,
+            age,
+            department,
+            percentage
+        };
+
+        if (useLocalStorage) {
+            students.push(student);
+            saveLocalStudents(students);
+            clearForm();
+            renderTable();
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/students', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(student)
+            });
+
+            if (!response.ok) throw new Error('API add failed');
+            const created = await response.json();
+            student.id = created.id || student.id;
+            students.push(student);
+        } catch (error) {
+            useLocalStorage = true;
+            students.push(student);
+            saveLocalStudents(students);
+        }
+
+        clearForm();
+        renderTable(); 
+    }
+
+    function renderTable() {
+        const table = document.getElementById("studentTable");
+        table.innerHTML = "";
+
+        students.forEach(student => {
+            table.innerHTML += `
+                <tr>
+                    <td>${student.name}</td>
+                    <td>${student.age}</td>
+                    <td>${student.department}</td>
+                    <td>${student.percentage}</td>
+                    <td>
+                        <button class="edit-btn" onclick="editStudent('${student.id}')">Edit</button>
+                        <button class="delete-btn" onclick="deleteStudent('${student.id}')">Delete</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    async function displayStudents() {
+        await fetchStudents();
+        renderTable();
+    }
+
+    async function deleteStudent(studentId) {
+        if (useLocalStorage) {
+            students = students.filter(s => s.id !== studentId);
+            saveLocalStudents(students);
+            renderTable();
+            return;
+        }
+
+        const response = await fetch(`/api/students/${encodeURIComponent(studentId)}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            alert('Unable to delete student.');
+            return;
+        }
+
+        renderTable();
+    }
+
+    async function editStudent(studentId) {
+        const student = students.find(s => s.id === studentId);
+        if (!student) return;
+
+        document.getElementById("name").value = student.name;
+        document.getElementById("age").value = student.age;
+        document.getElementById("department").value = student.department;
+        document.getElementById("percentage").value = student.percentage;
+
+        await deleteStudent(studentId);
+    }
+
+    function clearForm() {
+        document.getElementById("name").value = "";
+        document.getElementById("age").value = "";
+        document.getElementById("department").value = "";
+        document.getElementById("percentage").value = "";
+    }
+
+    function setLoginError(message) {
+        const errorElem = document.getElementById('loginError');
+        errorElem.textContent = message;
+    }
+
+    function showLogin() {
+        document.getElementById('loginPage').classList.remove('hidden');
+        document.getElementById('dashboardPage').classList.add('hidden');
+        document.getElementById('logoutBtn').classList.add('hidden');
+        setLoginError('');
+        document.getElementById('loginUsername').value = '';
+        document.getElementById('loginPassword').value = '';
+    }
+
+    function showDashboard() {
+        document.getElementById('loginPage').classList.add('hidden');
+        document.getElementById('dashboardPage').classList.remove('hidden');
+        document.getElementById('logoutBtn').classList.remove('hidden');
+        displayStudents();
+    }
+
+    async function handleLogin() {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+
+        if (!username || !password) {
+            setLoginError('Please enter both username and password.');
+            return;
+        }
+
+        // Try to authenticate with the backend if it exists
+        try {
+            const resp = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            if (resp.ok) {
+                localStorage.setItem(LOGIN_KEY, 'true');
+                showDashboard();
+                return;
+            }
+        } catch(e) {
+            console.log("No backend detected, proceeding locally");
+        }
+
+        if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+            localStorage.setItem(LOGIN_KEY, 'true');
+            showDashboard();
+            return;
+        }
+
+        setLoginError('Invalid credentials. Use admin/admin123');
+    }
+
+    async function handleLogout() {
+        try {
+            await fetch('/api/logout', { method: 'POST' });
+        } catch(e) {}
+        
+        localStorage.removeItem(LOGIN_KEY);
+        showLogin();
+    }
+
+    function loadCSVData() {
+        fetch("students.csv")
+            .then(response => response.text())
+            .then(data => {
+                const rows = data.split("\n").slice(1).filter(row => row.trim().length > 0); // skip header and empty rows
+                students = rows.map(row => {
+                    const cols = row.split(",");
+                    return {
+                        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+                        name: cols[0] ? cols[0].trim() : "Unknown",
+                        age: cols[1] ? Number(cols[1].trim()) : 0,
+                        department: cols[2] ? cols[2].trim() : "",
+                        percentage: cols[3] ? Number(cols[3].trim()) : 0
+                    };
+                });
+
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
+                renderTable();
+                alert("Student data loaded successfully from CSV!");
+            })
+            .catch(err => {
+                console.error("Error loading CSV:", err);
+            });
+    }
+
+    function loadJSONData() {
+        // Appending timestamp disables browser cache so newly saved JSON data is immediately reflected!
+        fetch("students.json?t=" + new Date().getTime())
+            .then(response => {
+                if (!response.ok) throw new Error("File not found or local fetch denied");
+                return response.json();
+            })
+            .then(data => {
+                // Ensure IDs exist cleanly
+                students = data.map(s => ({
+                    ...s,
+                    id: s.id || (Date.now().toString() + Math.random().toString(36).substr(2, 5))
+                }));
+                // Save and refresh visually
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
+                renderTable(); 
+                alert("Student data loaded successfully from JSON!");
+            })
+            .catch(error => {
+                console.error("Error loading JSON:", error);
+                alert("Error loading JSON: " + error.message + "\n\nMake sure you are running a local web server (like VSCode Live Server) to load files correctly.");
+            });
+    }
+
+    function initialize() {
+        document.getElementById('loginButton').addEventListener('click', handleLogin);
+        document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+
+        const loggedIn = localStorage.getItem(LOGIN_KEY) === 'true';
+        if (loggedIn) {
+            showDashboard();
+        } else {
+            showLogin();
+        }
+    }
+
+    initialize();
+</script>
+
+</body>
+</html>

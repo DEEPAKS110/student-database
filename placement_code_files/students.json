@@ -1,0 +1,12 @@
+[
+  { "name": "Deepak", "age": 20, "department": "CSE", "percentage": 85 },
+  { "name": "Rahul", "age": 21, "department": "ECE", "percentage": 78 },
+  { "name": "Priya", "age": 19, "department": "IT", "percentage": 92 },
+  { "name": "Arun", "age": 22, "department": "MECH", "percentage": 67 },
+  { "name": "Sneha", "age": 20, "department": "CSE", "percentage": 88 },
+  { "name": "Karthik", "age": 21, "department": "EEE", "percentage": 73 },
+  { "name": "Divya", "age": 19, "department": "IT", "percentage": 95 },
+  { "name": "Vijay", "age": 22, "department": "MECH", "percentage": 60 },
+  { "name": "Anjali", "age": 20, "department": "CSE", "percentage": 90 },
+  { "name": "Ravi", "age": 21, "department": "ECE", "percentage": 72 }
+]
