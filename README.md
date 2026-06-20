@@ -1,1 +1,1 @@
-# student-database
+A comprehensive web-based Student Management System designed to streamline academic and administrative processes. This project enables efficient management of student records, attendance, courses, grades, and user roles through an intuitive and responsive interface.
